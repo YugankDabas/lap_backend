@@ -1,0 +1,263 @@
+// Legal Agreement Portal - Prisma schema
+// PostgreSQL. See implementation plan §4 (Database Planning).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum Role {
+  LEGAL
+  FINANCE
+  BUSINESS
+  COMPLIANCE
+}
+
+// Teams map 1:1 to the four roles.
+enum Team {
+  LEGAL
+  FINANCE
+  BUSINESS
+  COMPLIANCE
+}
+
+enum AgreementType {
+  API_DIRECT
+  WHITE_LABEL
+  RESELLER
+  ENTERPRISE
+}
+
+// This build uses PENDING / UNDER_REVIEW / APPROVED (no REJECTED) per plan §14 item 12.
+enum TeamStatusValue {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+}
+
+enum ClauseOutcome {
+  PENDING
+  ACCEPTED
+  HELD
+  PARTIAL
+}
+
+enum HistoryEventType {
+  STATUS_CHANGE
+  REMARK_ADDED
+  REMINDER_SENT
+  SIGN_OFF
+  VERSION_ADDED
+  CLAUSE_OUTCOME_CHANGED
+  AGREEMENT_CREATED
+  AGREEMENT_UPDATED
+  COMPLIANCE_QUERY_RAISED
+}
+
+// ---------- Models ----------
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  createdAgreements Agreement[]        @relation("AgreementCreatedBy")
+  spocAssignments   AgreementSpoc[]
+  statusUpdates     TeamStatus[]       @relation("TeamStatusUpdatedBy")
+  versions          DocumentVersion[]  @relation("VersionCreatedBy")
+  comments          ClauseComment[]    @relation("CommentAuthor")
+  resolvedComments  ClauseComment[]    @relation("CommentResolvedBy")
+  remarks           Remark[]
+  historyEvents     HistoryLog[]
+  sentReminders     Reminder[]
+  signoffs          Signoff[]
+  complianceQueries ComplianceQuery[]
+
+  @@map("users")
+}
+
+model Agreement {
+  id            String        @id @default(uuid())
+  title         String
+  clientName    String        @map("client_name")
+  type          AgreementType
+  startDate     DateTime      @map("start_date")
+  lastUpdatedAt DateTime      @default(now()) @map("last_updated_at")
+  isDemo        Boolean       @default(false) @map("is_demo")
+  createdById   String        @map("created_by")
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  createdBy         User              @relation("AgreementCreatedBy", fields: [createdById], references: [id])
+  spocs             AgreementSpoc[]
+  teamStatuses      TeamStatus[]
+  versions          DocumentVersion[]
+  remarks           Remark[]
+  history           HistoryLog[]
+  reminders         Reminder[]
+  signoffs          Signoff[]
+  complianceQueries ComplianceQuery[]
+
+  @@map("agreements")
+}
+
+model AgreementSpoc {
+  id          String @id @default(uuid())
+  agreementId String @map("agreement_id")
+  team        Team
+  userId      String @map("user_id")
+
+  agreement Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@unique([agreementId, team])
+  @@map("agreement_spocs")
+}
+
+model TeamStatus {
+  id           String          @id @default(uuid())
+  agreementId  String          @map("agreement_id")
+  team         Team
+  status       TeamStatusValue @default(PENDING)
+  myStatusNote String?         @map("my_status_note")
+  updatedById  String?         @map("updated_by")
+  updatedAt    DateTime        @default(now()) @updatedAt @map("updated_at")
+
+  agreement Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  updatedBy User?     @relation("TeamStatusUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([agreementId, team])
+  @@map("team_statuses")
+}
+
+model DocumentVersion {
+  id            String   @id @default(uuid())
+  agreementId   String   @map("agreement_id")
+  versionLabel  String   @map("version_label")
+  versionNumber Int      @map("version_number")
+  createdById   String   @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  agreement Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("VersionCreatedBy", fields: [createdById], references: [id])
+  clauses   Clause[]
+
+  @@unique([agreementId, versionNumber])
+  @@map("document_versions")
+}
+
+model Clause {
+  id         String        @id @default(uuid())
+  versionId  String        @map("version_id")
+  clauseKey  String        @map("clause_key")
+  title      String
+  bodyText   String        @map("body_text")
+  outcome    ClauseOutcome @default(PENDING)
+  orderIndex Int           @map("order_index")
+
+  version  DocumentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  comments ClauseComment[]
+
+  @@map("clauses")
+}
+
+model ClauseComment {
+  id           String   @id @default(uuid())
+  clauseId     String   @map("clause_id")
+  authorId     String   @map("author_id")
+  body         String
+  isResolved   Boolean  @default(false) @map("is_resolved")
+  resolvedById String?  @map("resolved_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  clause     Clause @relation(fields: [clauseId], references: [id], onDelete: Cascade)
+  author     User   @relation("CommentAuthor", fields: [authorId], references: [id])
+  resolvedBy User?  @relation("CommentResolvedBy", fields: [resolvedById], references: [id])
+
+  @@map("clause_comments")
+}
+
+model Remark {
+  id          String   @id @default(uuid())
+  agreementId String   @map("agreement_id")
+  authorId    String   @map("author_id")
+  authorRole  Role     @map("author_role")
+  body        String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  agreement Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  author    User      @relation(fields: [authorId], references: [id])
+
+  @@map("remarks")
+}
+
+// Append-only audit trail. Never updated or deleted from the service layer.
+model HistoryLog {
+  id          String           @id @default(uuid())
+  agreementId String           @map("agreement_id")
+  actorId     String           @map("actor_id")
+  actorRole   Role             @map("actor_role")
+  eventType   HistoryEventType @map("event_type")
+  payload     Json?
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  agreement Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  actor     User      @relation(fields: [actorId], references: [id])
+
+  @@map("history_log")
+}
+
+model Reminder {
+  id             String    @id @default(uuid())
+  agreementId    String    @map("agreement_id")
+  senderId       String    @map("sender_id")
+  targetTeam     Team      @map("target_team")
+  message        String
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  agreement Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  sender    User      @relation(fields: [senderId], references: [id])
+
+  @@map("reminders")
+}
+
+model Signoff {
+  id                String   @id @default(uuid())
+  agreementId       String   @map("agreement_id")
+  signatoryId       String   @map("signatory_id")
+  signatoryName     String   @map("signatory_name")
+  signatoryRole     Role     @map("signatory_role")
+  disclaimerVersion String   @map("disclaimer_version")
+  signedAt          DateTime @default(now()) @map("signed_at")
+
+  agreement Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  signatory User      @relation(fields: [signatoryId], references: [id])
+
+  // One signature per signing role per agreement (LEGAL, BUSINESS).
+  @@unique([agreementId, signatoryRole])
+  @@map("signoffs")
+}
+
+model ComplianceQuery {
+  id           String   @id @default(uuid())
+  agreementId  String   @map("agreement_id")
+  raisedById   String   @map("raised_by")
+  raisedByName String   @map("raised_by_name")
+  queryText    String   @map("query_text")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  agreement Agreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  raisedBy  User      @relation(fields: [raisedById], references: [id])
+
+  @@map("compliance_queries")
+}
