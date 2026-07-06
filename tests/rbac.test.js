@@ -7,6 +7,10 @@ const request = require('supertest');
 const app = require('../src/app');
 const prisma = require('../src/config/prisma');
 
+// The suite runs against a remote (managed) database; login + setup round-trips
+// can exceed Jest's 5s default. Give hooks and tests generous headroom.
+jest.setTimeout(60000);
+
 const CREDS = {
   LEGAL: 'legal@demo.gyftr.com',
   FINANCE: 'finance@demo.gyftr.com',
@@ -59,17 +63,35 @@ describe('Authentication', () => {
     expect(res.status).toBe(401);
   });
 
-  test('register rejects duplicate email (409)', async () => {
+  // Registration is Legal-only provisioning (NFR-1) — no longer public.
+  test('public registration without auth is rejected (401)', async () => {
     const res = await request(app)
       .post('/api/auth/register')
+      .send({ name: 'X', email: 'pub@test.com', password: 'password123', role: 'FINANCE' });
+    expect(res.status).toBe(401);
+  });
+
+  test('non-Legal cannot provision accounts (403)', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .set(auth(tokens.FINANCE))
+      .send({ name: 'X', email: 'byfinance@test.com', password: 'password123', role: 'FINANCE' });
+    expect(res.status).toBe(403);
+  });
+
+  test('Legal register rejects duplicate email (409)', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .set(auth(tokens.LEGAL))
       .send({ name: 'Dup', email: CREDS.LEGAL, password: 'password123', role: 'LEGAL' });
     expect(res.status).toBe(409);
   });
 
-  test('register rejects invalid role (400)', async () => {
+  test('Legal register rejects invalid role (400)', async () => {
     const res = await request(app)
       .post('/api/auth/register')
-      .send({ name: 'X', email: 'x@test.com', password: 'password123', role: 'ADMIN' });
+      .set(auth(tokens.LEGAL))
+      .send({ name: 'X', email: 'badrole@test.com', password: 'password123', role: 'ADMIN' });
     expect(res.status).toBe(400);
   });
 });

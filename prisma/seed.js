@@ -52,6 +52,9 @@ async function main() {
           { team: 'COMPLIANCE', status: 'PENDING' },
         ],
       },
+      spocs: {
+        create: TEAMS.map((team) => ({ team, userId: users[team].id })),
+      },
     },
   });
 
@@ -182,6 +185,9 @@ async function main() {
           status: 'APPROVED',
           updatedById: users[team].id,
         })),
+      },
+      spocs: {
+        create: TEAMS.map((team) => ({ team, userId: users[team].id })),
       },
     },
   });

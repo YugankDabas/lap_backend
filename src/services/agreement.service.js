@@ -3,9 +3,12 @@ const ApiError = require('../lib/ApiError');
 const { recordHistory } = require('./history.service');
 const { TEAMS, TEAM_STATUS, HISTORY_EVENT, ROLES } = require('../constants');
 
-// Derive a single overall status from the four team circles (plan §14 item 1 - impl decision).
+// Derive a single overall status from the four team circles.
+// A rejection by any team is a blocker and surfaces first; otherwise all-approved
+// wins, then any in-review, else pending.
 function deriveOverallStatus(teamStatuses) {
   const values = teamStatuses.map((t) => t.status);
+  if (values.some((v) => v === TEAM_STATUS.REJECTED)) return 'REJECTED';
   if (values.length && values.every((v) => v === TEAM_STATUS.APPROVED)) return 'APPROVED';
   if (values.some((v) => v === TEAM_STATUS.UNDER_REVIEW)) return 'UNDER_REVIEW';
   return 'PENDING';

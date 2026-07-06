@@ -34,11 +34,12 @@ enum AgreementType {
   ENTERPRISE
 }
 
-// This build uses PENDING / UNDER_REVIEW / APPROVED (no REJECTED) per plan §14 item 12.
+// Four-state review circle per BRD FR-2: Pending / Under Review / Approved / Rejected.
 enum TeamStatusValue {
   PENDING
   UNDER_REVIEW
   APPROVED
+  REJECTED
 }
 
 enum ClauseOutcome {

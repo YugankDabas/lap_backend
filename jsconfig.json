@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2022",
+    "checkJs": false,
+    "allowJs": true,
+    "moduleResolution": "node",
+    "baseUrl": "./src",
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*.js", "prisma/**/*.js", "*.js"],
+  "exclude": ["node_modules", "dist", "build"]
+}

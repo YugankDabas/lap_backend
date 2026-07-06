@@ -16,11 +16,12 @@ const AGREEMENT_TYPES = {
   ENTERPRISE: 'ENTERPRISE',
 };
 
-// This build: no REJECTED (plan §14 item 12).
+// Four-state review circle per BRD FR-2.
 const TEAM_STATUS = {
   PENDING: 'PENDING',
   UNDER_REVIEW: 'UNDER_REVIEW',
   APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
 };
 
 const CLAUSE_OUTCOME = {
